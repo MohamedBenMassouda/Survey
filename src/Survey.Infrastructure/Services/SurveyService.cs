@@ -147,10 +147,6 @@ public class SurveyService(IUnitOfWork unitOfWork) : ISurveyService
         };
     }
 
-    // ============================================
-    // CREATE SURVEY WITH QUESTIONS (TRANSACTION)
-    // ============================================
-
     public async Task<SurveyDto> CreateSurveyAsync(CreateSurveyRequest request, Guid adminId)
     {
         try

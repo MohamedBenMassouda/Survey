@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Survey.Infrastructure.DTO;
 using Survey.Infrastructure.Interfaces;
@@ -34,6 +35,7 @@ public class AdminController(IUnitOfWork unitOfWork, IAdminService adminService)
         }
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateAdminDto admin)
     {

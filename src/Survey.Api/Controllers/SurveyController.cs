@@ -1,15 +1,17 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Survey.Core;
 using Survey.Infrastructure.DTO;
 using Survey.Infrastructure.Interfaces;
 using Survey.Infrastructure.Models;
 
 namespace Survey.Api.Controllers;
 
-public class SurveyController(IUnitOfWork unitOfWork, ISurveyService surveyService)
+public class SurveyController(IUnitOfWork unitOfWork, ISurveyService surveyService, ICurrentUser currentUser)
     : BaseController<SurveyModel>(unitOfWork)
 {
     private readonly ISurveyService _surveyService = surveyService;
+    private readonly ICurrentUser _currentUser = currentUser;
 
     [Authorize]
     [HttpGet("{id}/analytics")]
@@ -62,8 +64,8 @@ public class SurveyController(IUnitOfWork unitOfWork, ISurveyService surveyServi
                 return BadRequest(new { error = "End date must be after start date" });
             }
 
-            // var adminId = GetCurrentAdminId();
-            var survey = await _surveyService.CreateSurveyAsync(request, Guid.Empty);
+            var adminId = _currentUser.GetCurrentUserId();
+            var survey = await _surveyService.CreateSurveyAsync(request, adminId);
 
             return CreatedAtAction(
                 nameof(GetById),
