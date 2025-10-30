@@ -36,7 +36,6 @@ public class CreateSurveyRequest
 {
     public string Title { get; set; }
     public string Description { get; set; }
-    public bool? AllowAnonymous { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public List<CreateQuestionRequest> Questions { get; set; }
@@ -48,4 +47,24 @@ public class UpdateSurveyRequest
     public string Description { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
+}
+
+public class SendInvitationRequest
+{
+    public Guid SurveyId { get; set; }
+    public List<string> RecipientEmails { get; set; } = new();
+    public string? CustomMessage { get; set; }
+}
+
+public class InvitationResponse
+{
+    public int TotalInvitations { get; set; }
+    public List<string> SuccessfulInvitations { get; set; } = new();
+    public List<InvitationError> FailedInvitations { get; set; } = new();
+}
+
+public class InvitationError
+{
+    public string Email { get; set; }
+    public string ErrorMessage { get; set; }
 }

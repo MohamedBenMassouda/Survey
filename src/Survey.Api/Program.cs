@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Survey.Core;
+using Survey.Infrastructure.Configuration;
 using Survey.Infrastructure.Context;
 using Survey.Infrastructure.Interfaces;
 using Survey.Infrastructure.Repositories;
@@ -12,6 +14,7 @@ using Survey.Infrastructure.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddCors();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -23,10 +26,15 @@ builder.Services.AddDbContext<SurveyDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 
+// Configure Email Settings
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ISurveyService, SurveyService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddSingleton<ICurrentUser, CurrentUser>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

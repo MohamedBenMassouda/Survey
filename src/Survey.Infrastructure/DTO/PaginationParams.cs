@@ -27,7 +27,7 @@ public class QueryParams : PaginationParams
     /// <summary>
     /// Sort field (e.g., "title", "createdAt")
     /// </summary>
-    public string SortBy { get; set; }
+    public string SortBy { get; set; } = "createdAt";
 
     /// <summary>
     /// Sort direction: "asc" or "desc"
@@ -37,7 +37,7 @@ public class QueryParams : PaginationParams
     /// <summary>
     /// Search query for text search
     /// </summary>
-    public string Search { get; set; }
+    public string? Search { get; set; }
 
     /// <summary>
     /// Whether sort direction is ascending
@@ -69,16 +69,6 @@ public class SurveyQueryParams : QueryParams
     /// Filter by date range - end date
     /// </summary>
     public DateTime? StartDateTo { get; set; }
-
-    /// <summary>
-    /// Include only active surveys
-    /// </summary>
-    public bool? IsActive { get; set; }
-
-    /// <summary>
-    /// Include only anonymous surveys
-    /// </summary>
-    public bool? AllowAnonymous { get; set; }
 }
 
 /// <summary>

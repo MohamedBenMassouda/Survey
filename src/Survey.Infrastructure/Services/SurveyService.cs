@@ -6,9 +6,10 @@ using Survey.Infrastructure.Models;
 
 namespace Survey.Infrastructure.Services;
 
-public class SurveyService(IUnitOfWork unitOfWork) : ISurveyService
+public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) : ISurveyService
 {
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
+    private readonly IEmailService _emailService = emailService;
 
     public async Task<PagedResult<SurveyDto>> GetSurveysAsync(SurveyQueryParams query)
     {
@@ -165,7 +166,6 @@ public class SurveyService(IUnitOfWork unitOfWork) : ISurveyService
             };
 
             await _unitOfWork.Surveys.AddAsync(survey);
-            await _unitOfWork.SaveChangesAsync();
 
             // Create questions
             if (request.Questions.Any())
@@ -174,20 +174,19 @@ public class SurveyService(IUnitOfWork unitOfWork) : ISurveyService
                 {
                     SurveyId = survey.Id,
                     QuestionText = q.QuestionText,
-                    Type = Enum.Parse<QuestionType>(q.QuestionType),
+                    Type = q.QuestionType,
                     IsRequired = q.IsRequired,
                     DisplayOrder = q.DisplayOrder ?? index + 1
                 }).ToList();
 
                 await _unitOfWork.Questions.AddRangeAsync(questions);
-                await _unitOfWork.SaveChangesAsync();
 
                 // Create options for choice-based questions
                 foreach (var questionRequest in request.Questions)
                 {
                     if (questionRequest.Options.Any())
                     {
-                        var questionType = Enum.Parse<QuestionType>(questionRequest.QuestionType);
+                        var questionType = questionRequest.QuestionType;
 
                         if (questionType != QuestionType.MultipleChoice &&
                             questionType != QuestionType.Checkbox &&
@@ -211,10 +210,10 @@ public class SurveyService(IUnitOfWork unitOfWork) : ISurveyService
                         await _unitOfWork.QuestionOptions.AddRangeAsync(options);
                     }
                 }
-
-                await _unitOfWork.SaveChangesAsync();
             }
 
+            // Save all changes at once
+            await _unitOfWork.SaveChangesAsync();
             await _unitOfWork.CommitTransactionAsync();
 
             // Return DTO
@@ -405,5 +404,117 @@ public class SurveyService(IUnitOfWork unitOfWork) : ISurveyService
             .Replace("+", "-")
             .Replace("/", "_")
             .TrimEnd('=');
+    }
+
+    public async Task<InvitationResponse> SendInvitationsAsync(SendInvitationRequest request, string baseUrl)
+    {
+        var response = new InvitationResponse();
+        var emailTokenMap = new Dictionary<string, string>();
+
+        var survey = await _unitOfWork.Surveys.GetByIdAsync(request.SurveyId);
+
+        if (survey == null)
+        {
+            throw new ArgumentException("Survey not found");
+        }
+
+        if (survey.Status != SurveyStatus.Published)
+        {
+            throw new InvalidOperationException("Survey must be published to send invitations");
+        }
+
+        try
+        {
+            await _unitOfWork.BeginTransactionAsync();
+
+            // Generate tokens for each email
+            foreach (var email in request.RecipientEmails)
+            {
+                try
+                {
+                    // Validate email format
+                    if (!IsValidEmail(email))
+                    {
+                        response.FailedInvitations.Add(new InvitationError
+                        {
+                            Email = email,
+                            ErrorMessage = "Invalid email format"
+                        });
+                        continue;
+                    }
+
+                    // Generate unique token
+                    var token = GenerateSecureToken();
+
+                    // Save token to database
+                    await _unitOfWork.SurveyTokens.AddAsync(new SurveyToken
+                    {
+                        SurveyId = request.SurveyId,
+                        Token = token,
+                    });
+
+                    emailTokenMap[email] = token;
+                }
+                catch (Exception ex)
+                {
+                    response.FailedInvitations.Add(new InvitationError
+                    {
+                        Email = email,
+                        ErrorMessage = ex.Message
+                    });
+                }
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+
+            // Send emails
+            var surveyLink = $"{baseUrl}/surveys/{survey.Id}";
+            
+            foreach (var emailToken in emailTokenMap)
+            {
+                try
+                {
+                    await _emailService.SendSurveyInvitationAsync(
+                        emailToken.Key,
+                        survey.Title,
+                        surveyLink,
+                        emailToken.Value
+                    );
+
+                    response.SuccessfulInvitations.Add(emailToken.Key);
+                }
+                catch (Exception ex)
+                {
+                    response.FailedInvitations.Add(new InvitationError
+                    {
+                        Email = emailToken.Key,
+                        ErrorMessage = $"Failed to send email: {ex.Message}"
+                    });
+                }
+            }
+
+            await _unitOfWork.CommitTransactionAsync();
+
+            response.TotalInvitations = request.RecipientEmails.Count;
+            return response;
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            throw;
+        }
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

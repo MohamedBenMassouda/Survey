@@ -16,7 +16,7 @@ public class QuestionDto
 public class CreateQuestionRequest
 {
     public string QuestionText { get; set; }
-    public string QuestionType { get; set; }
+    public QuestionType QuestionType { get; set; }
     public bool IsRequired { get; set; }
     public int? DisplayOrder { get; set; }
     public List<CreateOptionRequest> Options { get; set; }
