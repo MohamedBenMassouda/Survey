@@ -53,7 +53,7 @@ public class SurveyQueryParams : QueryParams
     /// <summary>
     /// Filter by survey status (e.g., "Published", "Draft")
     /// </summary>
-    public SurveyStatus Status { get; set; }
+    public SurveyStatus? Status { get; set; }
 
     /// <summary>
     /// Filter by creator admin ID

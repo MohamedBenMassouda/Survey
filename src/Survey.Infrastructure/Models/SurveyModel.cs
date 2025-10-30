@@ -19,9 +19,12 @@ public class SurveyModel : BaseEntity
     public bool IsActive { get; set; } = true;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public SurveyStatus Status { get; set; } = SurveyStatus.Draft;
-    public DateTime StartDate { get; set; }
+    public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
-    public Guid CreatedBy { get; set; }
+    public Guid CreatorId { get; set; }
 
     public ICollection<Question> Questions { get; set; } = new List<Question>();
+    public ICollection<SurveyToken> Tokens { get; set; } = new List<SurveyToken>();
+    public ICollection<SurveyResponse> Responses { get; set; } = new List<SurveyResponse>();
+    public Admin Creator { get; set; }
 }

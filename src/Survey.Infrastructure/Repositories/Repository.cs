@@ -115,6 +115,7 @@ public class Repository<TEntity>(SurveyDbContext context) : IRepository<TEntity>
     public virtual async Task<TEntity> AddAsync(TEntity entity)
     {
         await _dbSet.AddAsync(entity);
+
         return entity;
     }
 

@@ -9,8 +9,9 @@ namespace Survey.Api.Controllers;
 [Route("api/[controller]s")]
 public class BaseController<TEntity>(IUnitOfWork unitOfWork) : ControllerBase where TEntity : BaseEntity
 {
-    private readonly IUnitOfWork _unitOfWork = unitOfWork;
-    private readonly IRepository<TEntity> _repository = unitOfWork.Repository<TEntity>();
+    protected readonly IUnitOfWork _unitOfWork = unitOfWork;
+    protected readonly IRepository<TEntity> _repository = unitOfWork.Repository<TEntity>();
+    protected string _entityName = typeof(TEntity).Name;
 
     [HttpGet]
     public async Task<ActionResult> GetAll([FromQuery] PaginationParams pagination)
@@ -30,9 +31,7 @@ public class BaseController<TEntity>(IUnitOfWork unitOfWork) : ControllerBase wh
             return Ok(entity);
         }
 
-        var entityName = typeof(TEntity).Name;
-
-        return NotFound($"{entityName} with ID {id} not found.");
+        return NotFound($"{_entityName} with ID {id} not found.");
 
     }
 }
