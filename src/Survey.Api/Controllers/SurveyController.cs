@@ -142,4 +142,20 @@ public class SurveyController(IUnitOfWork unitOfWork, ISurveyService surveyServi
             return StatusCode(500, new { error = "An error occurred while sending invitations", details = ex.Message });
         }
     }
+
+    [HttpPost("{id}/publish")]
+    [Authorize]
+    [ProducesResponseType(typeof(SurveyDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> PublishSurvey(Guid id)
+    {
+        var survey = await _surveyService.PublishSurveyAsync(id);
+        
+        if (survey == null)
+        {
+            return NotFound(new { error = $"Survey with ID {id} not found" });
+        }
+
+        return Ok(survey);
+    }
 }

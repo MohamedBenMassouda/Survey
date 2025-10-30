@@ -21,8 +21,9 @@ public class EmailService : IEmailService
         _emailSettings = emailSettings.Value;
         _logger = logger;
 
-        // Configure Brevo API client
-        brevo_csharp.Client.Configuration.Default.ApiKey.Add("api-key", _emailSettings.Password);
+        // Configure Brevo API client with proper API key
+        // Brevo expects the API key to be set on the Default configuration
+        brevo_csharp.Client.Configuration.Default.AddApiKey("api-key", _emailSettings.Password);
         _apiInstance = new TransactionalEmailsApi();
     }
 
@@ -56,6 +57,16 @@ public class EmailService : IEmailService
                 "Survey invitation sent successfully to {Email}. MessageId: {MessageId}",
                 recipientEmail,
                 result.MessageId);
+        }
+        catch (brevo_csharp.Client.ApiException apiEx)
+        {
+            _logger.LogError(
+                apiEx,
+                "Brevo API error sending invitation to {Email}. Status: {Status}, Response: {Response}",
+                recipientEmail,
+                apiEx.ErrorCode,
+                apiEx.Message);
+            throw new Exception($"Email API error: {apiEx.Message} (Status: {apiEx.ErrorCode})", apiEx);
         }
         catch (Exception ex)
         {

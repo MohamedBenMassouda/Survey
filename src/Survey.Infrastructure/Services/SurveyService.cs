@@ -460,12 +460,16 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
                     response.FailedInvitations.Add(new InvitationError
                     {
                         Email = email,
-                        ErrorMessage = ex.Message
+                        ErrorMessage = $"Token generation failed: {ex.Message}"
                     });
                 }
             }
 
-            await _unitOfWork.SaveChangesAsync();
+            // Only save tokens if at least one was generated successfully
+            if (emailTokenMap.Any())
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
 
             // Send emails
             var surveyLink = $"{baseUrl}/surveys/{survey.Id}";
@@ -490,6 +494,12 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
                         Email = emailToken.Key,
                         ErrorMessage = $"Failed to send email: {ex.Message}"
                     });
+                    
+                    // Log inner exception details if available
+                    if (ex.InnerException != null)
+                    {
+                        response.FailedInvitations.Last().ErrorMessage += $" | Inner: {ex.InnerException.Message}";
+                    }
                 }
             }
 
@@ -498,10 +508,10 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
             response.TotalInvitations = request.RecipientEmails.Count;
             return response;
         }
-        catch
+        catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync();
-            throw;
+            throw new Exception($"Failed to send invitations: {ex.Message}", ex);
         }
     }
 
