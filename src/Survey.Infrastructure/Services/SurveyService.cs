@@ -1,3 +1,5 @@
+using Survey.Core;
+using Survey.Core.Exceptions;
 using Survey.Infrastructure.DTO;
 using Survey.Infrastructure.Enums;
 using Survey.Infrastructure.Extensions;
@@ -6,10 +8,11 @@ using Survey.Infrastructure.Models;
 
 namespace Survey.Infrastructure.Services;
 
-public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) : ISurveyService
+public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService, ICurrentUser currentUser) : ISurveyService
 {
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
     private readonly IEmailService _emailService = emailService;
+    private readonly ICurrentUser _currentUser = currentUser;
 
     public async Task<PagedResult<SurveyDto>> GetSurveysAsync(SurveyQueryParams query)
     {
@@ -22,6 +25,13 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
             filter = filter.And(s => s.Status == query.Status.Value);
         }
 
+        /*if (!_currentUser.IsLoggedIn())
+        {
+            filter = filter.And<SurveyModel>(s => s.Status == SurveyStatus.Published &&
+                s.StartDate <= DateTime.UtcNow &&
+                s.EndDate >= DateTime.UtcNow);
+        }*/
+        
         // Filter by creator
         if (query.CreatedByAdminId.HasValue)
         {
@@ -116,11 +126,18 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
         var survey = await _unitOfWork.Surveys.GetByIdAsync(
             id,
             s => s.Creator,
-            s => s.Questions.OrderBy(q => q.DisplayOrder)
+            s => s.Questions
         );
 
         if (survey == null)
-            return null;
+            throw new NotFoundException($"Survey with ID {id} not found.");
+
+        // Load question options for all questions
+        var questionIds = survey.Questions.Select(q => q.Id).ToList();
+        var allOptions = await _unitOfWork.QuestionOptions.FindAsync(o => questionIds.Contains(o.QuestionId));
+        
+        // Group options by question
+        var optionsByQuestion = allOptions.GroupBy(o => o.QuestionId).ToDictionary(g => g.Key, g => g.ToList());
 
         return new SurveyDetailDto
         {
@@ -136,13 +153,21 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
                 Email = survey.Creator.Email,
                 FullName = survey.Creator.FullName
             },
-            Questions = survey.Questions.Select(q => new QuestionDto
+            Questions = survey.Questions.OrderBy(q => q.DisplayOrder).Select(q => new QuestionDto
             {
                 Id = q.Id,
                 QuestionText = q.QuestionText,
                 QuestionType = q.Type,
                 IsRequired = q.IsRequired,
-                DisplayOrder = q.DisplayOrder
+                DisplayOrder = q.DisplayOrder,
+                Options = optionsByQuestion.ContainsKey(q.Id)
+                    ? optionsByQuestion[q.Id].OrderBy(o => o.DisplayOrder).Select(o => new QuestionOptionDto
+                    {
+                        Id = o.Id,
+                        OptionText = o.OptionText,
+                        DisplayOrder = o.DisplayOrder
+                    }).ToList()
+                    : new List<QuestionOptionDto>()
             }).ToList(),
             CreatedAt = survey.CreatedAt
         };
@@ -150,6 +175,17 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
 
     public async Task<SurveyDto> CreateSurveyAsync(CreateSurveyRequest request, Guid adminId)
     {
+        // Validation
+        if (string.IsNullOrWhiteSpace(request.Title))
+        {
+            throw new BadRequestException("Survey title is required.");
+        }
+
+        if (request.EndDate.HasValue && request.StartDate.HasValue && request.EndDate < request.StartDate)
+        {
+            throw new BadRequestException("End date must be after start date.");
+        }
+
         try
         {
             await _unitOfWork.BeginTransactionAsync();
@@ -230,10 +266,10 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
                 CreatedAt = survey.CreatedAt
             };
         }
-        catch
+        catch (Exception ex) when (ex is not SurveyException)
         {
             await _unitOfWork.RollbackTransactionAsync();
-            throw;
+            throw new SurveyException($"Failed to create survey: {ex.Message}", ex);
         }
     }
 
@@ -247,7 +283,7 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
 
         if (survey == null)
         {
-            return null;
+            throw new NotFoundException($"Survey with ID {id} not found.");
         }
 
         survey.Title = request.Title ?? survey.Title;
@@ -277,7 +313,7 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
 
         if (survey == null)
         {
-            return false;
+            throw new NotFoundException($"Survey with ID {id} not found.");
         }
 
         _unitOfWork.Surveys.Delete(survey);
@@ -296,17 +332,17 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
 
         if (survey == null)
         {
-            return null;
+            throw new NotFoundException($"Survey with ID {id} not found.");
         }
 
         if (survey.Status != SurveyStatus.Draft)
         {
-            throw new InvalidOperationException("Only draft surveys can be published");
+            throw new BadRequestException("Only draft surveys can be published.");
         }
 
         if (!survey.Questions.Any())
         {
-            throw new InvalidOperationException("Survey must have at least one question");
+            throw new BadRequestException("Survey must have at least one question to be published.");
         }
 
         survey.Status = SurveyStatus.Published;
@@ -333,10 +369,10 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
         var survey = await _unitOfWork.Surveys.GetByIdAsync(surveyId);
 
         if (survey == null)
-            throw new ArgumentException("Survey not found");
+            throw new NotFoundException($"Survey with ID {surveyId} not found.");
 
         if (survey.Status != SurveyStatus.Published)
-            throw new InvalidOperationException("Survey must be published to generate tokens");
+            throw new BadRequestException("Survey must be published to generate tokens.");
 
         var tokens = new List<string>();
         var expiresAt = DateTime.UtcNow.AddDays(expiryDays);
@@ -370,7 +406,7 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
 
         if (survey == null)
         {
-            return null;
+            throw new NotFoundException($"Survey with ID {surveyId} not found.");
         }
 
         var completedResponses = survey.Responses.Count(r => r.IsCompleted);
@@ -415,12 +451,17 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
 
         if (survey == null)
         {
-            throw new ArgumentException("Survey not found");
+            throw new NotFoundException($"Survey with ID {request.SurveyId} not found.");
         }
 
         if (survey.Status != SurveyStatus.Published)
         {
-            throw new InvalidOperationException("Survey must be published to send invitations");
+            throw new BadRequestException("Survey must be published to send invitations.");
+        }
+
+        if (request.RecipientEmails == null || !request.RecipientEmails.Any())
+        {
+            throw new BadRequestException("At least one recipient email is required.");
         }
 
         try
@@ -470,6 +511,11 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
             {
                 await _unitOfWork.SaveChangesAsync();
             }
+            else
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw new BadRequestException("Failed to generate tokens for any recipient.");
+            }
 
             // Send emails
             var surveyLink = $"{baseUrl}/surveys/{survey.Id}";
@@ -489,17 +535,27 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
                 }
                 catch (Exception ex)
                 {
+                    var errorMessage = ex.Message;
+                    
+                    // Extract user-friendly error message from email service exceptions
+                    if (ex.Message.Contains("Key not found"))
+                    {
+                        errorMessage = "Email service configuration error. Please contact administrator.";
+                    }
+                    else if (ex.Message.Contains("unauthorized"))
+                    {
+                        errorMessage = "Email service authentication failed. Please contact administrator.";
+                    }
+                    else if (ex.Message.Contains("Invalid sender"))
+                    {
+                        errorMessage = "Sender email not verified. Please contact administrator.";
+                    }
+                    
                     response.FailedInvitations.Add(new InvitationError
                     {
                         Email = emailToken.Key,
-                        ErrorMessage = $"Failed to send email: {ex.Message}"
+                        ErrorMessage = errorMessage
                     });
-                    
-                    // Log inner exception details if available
-                    if (ex.InnerException != null)
-                    {
-                        response.FailedInvitations.Last().ErrorMessage += $" | Inner: {ex.InnerException.Message}";
-                    }
                 }
             }
 
@@ -508,10 +564,10 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService) :
             response.TotalInvitations = request.RecipientEmails.Count;
             return response;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not SurveyException)
         {
             await _unitOfWork.RollbackTransactionAsync();
-            throw new Exception($"Failed to send invitations: {ex.Message}", ex);
+            throw new SurveyException($"Failed to send invitations: {ex.Message}", ex);
         }
     }
 

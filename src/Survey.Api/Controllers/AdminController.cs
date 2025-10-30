@@ -11,44 +11,21 @@ public class AdminController(IUnitOfWork unitOfWork, IAdminService adminService)
     private readonly IAdminService _adminService = adminService;
 
     [HttpPost("login")]
+    [ProducesResponseType(typeof(LoginTokenDto), 200)]
+    [ProducesResponseType(401)]
     public async Task<IActionResult> Login([FromBody] AdminLoginDto loginDto)
     {
-        try
-        {
-            var token = await _adminService.AuthenticateAsync(loginDto);
-
-            if (token == null)
-            {
-                return Unauthorized(new { error = "Invalid email or password" });
-            }
-
-            return Ok(token);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Unauthorized(new { error = "Invalid email or password" });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500,
-                new { error = "An error occurred during authentication", details = ex.Message });
-        }
+        var token = await _adminService.AuthenticateAsync(loginDto);
+        return Ok(token);
     }
 
     [Authorize]
     [HttpPost]
+    [ProducesResponseType(typeof(AdminDto), 201)]
+    [ProducesResponseType(400)]
     public async Task<IActionResult> Create([FromBody] CreateAdminDto admin)
     {
-        try
-        {
-            var result = await _adminService.CreateAdmin(admin);
-
-            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500,
-                new { error = "An error occurred while creating the admin", details = ex.Message });
-        }
+        var result = await _adminService.CreateAdmin(admin);
+        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 }

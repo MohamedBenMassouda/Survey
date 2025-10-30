@@ -23,4 +23,11 @@ public class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUse
 
         return Guid.Parse(userId.Value);
     }
+    
+    public bool IsLoggedIn()
+    {
+        var user = httpContextAccessor.HttpContext?.User;
+        
+        return user != null && user.Identity!.IsAuthenticated;
+    }
 }

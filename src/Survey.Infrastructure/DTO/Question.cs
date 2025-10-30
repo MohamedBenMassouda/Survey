@@ -11,6 +11,14 @@ public class QuestionDto
     public QuestionType QuestionType { get; set; }
     public bool IsRequired { get; set; }
     public int DisplayOrder { get; set; }
+    public List<QuestionOptionDto> Options { get; set; } = new();
+}
+
+public class QuestionOptionDto
+{
+    public Guid Id { get; set; }
+    public string OptionText { get; set; }
+    public int DisplayOrder { get; set; }
 }
 
 public class CreateQuestionRequest
