@@ -1,0 +1,21 @@
+services:
+  postgresdb:
+    image: postgres:17-alpine
+    container_name: survey-db
+    ports:
+      - "5437:5432"
+    environment:
+      - POSTGRES_USER=survey
+      - POSTGRES_PASSWORD=survey
+      - POSTGRES_DB=survey-db
+    volumes:
+      - survey_postgres_data:/var/lib/postgresql/data
+    networks:
+      - survey-network
+
+volumes:
+  survey_postgres_data:
+
+networks:
+  survey-network:
+    driver: bridge
