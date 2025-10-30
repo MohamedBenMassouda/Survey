@@ -2,6 +2,7 @@ import React from 'react';
 import type { ReactNode } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { MemeNotificationTrigger } from './MemeNotificationTrigger';
 import { 
   BarChart3, 
   FileText, 
@@ -33,6 +34,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {/* Meme notification trigger - only active in admin area */}
+      <MemeNotificationTrigger />
+      
       {/* Sidebar */}
       <div className="w-64 bg-white shadow-sm">
         <div className="flex flex-col h-full">

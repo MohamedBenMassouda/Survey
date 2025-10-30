@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSurveys } from '../api/surveys';
-import { FileText, Users, BarChart3, Plus, TrendingUp } from 'lucide-react';
+import { useNotifications } from '../contexts/NotificationContext';
+import { memeQuotesApi } from '../api/memes';
+import { FileText, Users, BarChart3, Plus, TrendingUp, Smile } from 'lucide-react';
 import type { SurveyDto } from '../types';
 
 export const DashboardPage: React.FC = () => {
   const [surveys, setSurveys] = useState<SurveyDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
     const fetchSurveys = async () => {
@@ -24,6 +27,25 @@ export const DashboardPage: React.FC = () => {
 
     fetchSurveys();
   }, []);
+
+  const handleTestMemeQuote = async () => {
+    try {
+      const quote = await memeQuotesApi.getRandomMemeQuote();
+      addNotification({
+        type: 'meme',
+        title: '🎯 Test Meme Quote',
+        message: `"${quote.content}" - ${quote.author}`,
+        duration: 8000,
+      });
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to fetch meme quote',
+        duration: 5000,
+      });
+    }
+  };
 
   const stats = [
     {
@@ -64,13 +86,22 @@ export const DashboardPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <Link
-          to="/admin/surveys/create"
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Create Survey
-        </Link>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleTestMemeQuote}
+            className="inline-flex items-center px-3 py-2 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+          >
+            <Smile className="mr-2 h-4 w-4" />
+            Test Meme Quote
+          </button>
+          <Link
+            to="/admin/surveys/create"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create Survey
+          </Link>
+        </div>
       </div>
 
       {/* Stats Grid */}
