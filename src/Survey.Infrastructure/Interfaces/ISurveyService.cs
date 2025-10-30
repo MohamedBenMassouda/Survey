@@ -14,4 +14,5 @@ public interface ISurveyService
     Task<SurveyAnalyticsDto?> GetAnalyticsAsync(Guid surveyId);
     Task<PagedResult<SurveyDto>> GetPublishedSurveysAsync(PaginationParams paginationParams);
     Task<InvitationResponse> SendInvitationsAsync(SendInvitationRequest request, string baseUrl);
+    Task<SurveyResponseDto> SubmitSurveyResponseAsync(SubmitSurveyResponseRequest request);
 }

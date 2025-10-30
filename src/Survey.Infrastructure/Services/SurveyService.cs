@@ -97,9 +97,7 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService, I
     public async Task<PagedResult<SurveyDto>> GetPublishedSurveysAsync(PaginationParams paginationParams)
     {
         var filter = PredicateBuilder.True<SurveyModel>()
-            .And(s => s.Status == SurveyStatus.Published)
-            .And(s => s.StartDate <= DateTime.UtcNow)
-            .And(s => s.EndDate >= DateTime.UtcNow);
+            .And(s => s.Status == SurveyStatus.Published);
 
         var pagedResult = await _unitOfWork.Surveys.GetPagedAsync<SurveyDto>(
             pageNumber: paginationParams.PageNumber,
@@ -181,9 +179,21 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService, I
             throw new BadRequestException("Survey title is required.");
         }
 
-        if (request.EndDate.HasValue && request.StartDate.HasValue && request.EndDate < request.StartDate)
+        // Validate date logic
+        if (request.StartDate.HasValue && request.EndDate.HasValue)
         {
-            throw new BadRequestException("End date must be after start date.");
+            if (request.EndDate <= request.StartDate)
+            {
+                throw new BadRequestException("End date must be after start date.");
+            }
+        }
+        else if (request.EndDate.HasValue && !request.StartDate.HasValue)
+        {
+            // If only end date is provided, ensure it's in the future
+            if (request.EndDate <= DateTime.UtcNow)
+            {
+                throw new BadRequestException("End date must be in the future.");
+            }
         }
 
         try
@@ -286,10 +296,25 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService, I
             throw new NotFoundException($"Survey with ID {id} not found.");
         }
 
+        // Update fields
         survey.Title = request.Title ?? survey.Title;
         survey.Description = request.Description ?? survey.Description;
-        survey.StartDate = request.StartDate ?? survey.StartDate;
-        survey.EndDate = request.EndDate ?? survey.EndDate;
+        
+        // Update dates with validation
+        var newStartDate = request.StartDate ?? survey.StartDate;
+        var newEndDate = request.EndDate ?? survey.EndDate;
+        
+        // Validate date logic
+        if (newStartDate.HasValue && newEndDate.HasValue)
+        {
+            if (newEndDate <= newStartDate)
+            {
+                throw new BadRequestException("End date must be after start date.");
+            }
+        }
+        
+        survey.StartDate = newStartDate;
+        survey.EndDate = newEndDate;
         survey.UpdatedAt = DateTime.UtcNow;
 
         _unitOfWork.Surveys.Update(survey);
@@ -581,6 +606,144 @@ public class SurveyService(IUnitOfWork unitOfWork, IEmailService emailService, I
         catch
         {
             return false;
+        }
+    }
+
+    public async Task<SurveyResponseDto> SubmitSurveyResponseAsync(SubmitSurveyResponseRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Token))
+        {
+            throw new BadRequestException("Token is required.");
+        }
+
+        if (request.Answers == null || !request.Answers.Any())
+        {
+            throw new BadRequestException("At least one answer is required.");
+        }
+
+        try
+        {
+            await _unitOfWork.BeginTransactionAsync();
+
+            // Validate token
+            var token = await _unitOfWork.SurveyTokens.FirstOrDefaultAsync(t => t.Token == request.Token);
+            
+            if (token == null)
+            {
+                throw new NotFoundException("Invalid token.");
+            }
+
+            if (token.IsUsed)
+            {
+                throw new BadRequestException("This token has already been used.");
+            }
+
+            // Get survey with questions
+            var survey = await _unitOfWork.Surveys.GetByIdAsync(
+                token.SurveyId,
+                includes: s => s.Questions
+            );
+
+            if (survey == null)
+            {
+                throw new NotFoundException("Survey not found.");
+            }
+
+            if (survey.Status != SurveyStatus.Published)
+            {
+                throw new BadRequestException("This survey is not currently accepting responses.");
+            }
+
+            // Check if survey is within active dates
+            if (survey.StartDate.HasValue && survey.StartDate > DateTime.UtcNow)
+            {
+                throw new BadRequestException("This survey has not started yet.");
+            }
+
+            if (survey.EndDate.HasValue && survey.EndDate < DateTime.UtcNow)
+            {
+                throw new BadRequestException("This survey has ended.");
+            }
+
+            // Validate required questions are answered
+            var requiredQuestionIds = survey.Questions.Where(q => q.IsRequired).Select(q => q.Id).ToList();
+            var answeredQuestionIds = request.Answers.Select(a => a.QuestionId).ToList();
+            var missingRequired = requiredQuestionIds.Except(answeredQuestionIds).ToList();
+
+            if (missingRequired.Any())
+            {
+                throw new BadRequestException("All required questions must be answered.");
+            }
+
+            // Create survey response
+            var surveyResponse = new SurveyResponse
+            {
+                SurveyId = survey.Id,
+                TokenId = token.Id,
+                IsCompleted = true,
+                StartedAt = DateTime.UtcNow,
+                CompletedAt = DateTime.UtcNow
+            };
+
+            await _unitOfWork.SurveyResponses.AddAsync(surveyResponse);
+
+            // Create answers
+            foreach (var answer in request.Answers)
+            {
+                // Validate question belongs to survey
+                if (!survey.Questions.Any(q => q.Id == answer.QuestionId))
+                {
+                    throw new BadRequestException($"Question {answer.QuestionId} does not belong to this survey.");
+                }
+
+                var responseAnswer = new SurveyResponseAnswer
+                {
+                    ResponseId = surveyResponse.Id,
+                    QuestionId = answer.QuestionId,
+                    AnswerText = answer.AnswerText
+                };
+
+                await _unitOfWork.SurveyResponseAnswers.AddAsync(responseAnswer);
+
+                // Handle selected options for multiple choice questions
+                if (answer.SelectedOptionIds != null && answer.SelectedOptionIds.Any())
+                {
+                    foreach (var optionId in answer.SelectedOptionIds)
+                    {
+                        var answerOption = new SurveyResponseAnswerOption
+                        {
+                            AnswerId = responseAnswer.Id,
+                            QuestionOptionId = optionId
+                        };
+
+                        await _unitOfWork.SurveyResponseAnswerOptions.AddAsync(answerOption);
+                    }
+                }
+            }
+
+            // Mark token as used and expire it
+            token.IsUsed = true;
+            token.UsedAt = DateTime.UtcNow;
+            _unitOfWork.SurveyTokens.Update(token);
+
+            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.CommitTransactionAsync();
+
+            return new SurveyResponseDto
+            {
+                Id = surveyResponse.Id,
+                SurveyId = survey.Id,
+                SurveyTitle = survey.Title,
+                IsCompleted = true,
+                StartedAt = surveyResponse.StartedAt,
+                CompletedAt = surveyResponse.CompletedAt,
+                Message = "Thank you for completing the survey!"
+            };
+        }
+        catch (Exception ex) when (ex is not SurveyException)
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            throw new SurveyException($"Failed to submit survey response: {ex.Message}", ex);
         }
     }
 }

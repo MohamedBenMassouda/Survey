@@ -93,4 +93,15 @@ public class SurveyController(
         
         return Ok(survey);
     }
+
+    [HttpPost("responses")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(SurveyResponseDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> SubmitResponse([FromBody] SubmitSurveyResponseRequest request)
+    {
+        var response = await _surveyService.SubmitSurveyResponseAsync(request);
+        return Ok(response);
+    }
 }

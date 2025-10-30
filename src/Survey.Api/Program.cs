@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using Azure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -13,6 +14,9 @@ using Survey.Infrastructure.Repositories;
 using Survey.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+var keyVaultUrl = builder.Configuration["KeyVault:Url"];
+
+builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), new DefaultAzureCredential());
 
 builder.Services.AddCors(options =>
 {

@@ -38,13 +38,13 @@ public class UnitOfWork(SurveyDbContext context) : IUnitOfWork
     public IRepository<SurveyToken> SurveyTokens =>
         _surveyTokens ??= new Repository<SurveyToken>(context);
 
-    public IRepository<SurveyResponse> Responses =>
+    public IRepository<SurveyResponse> SurveyResponses =>
         _responses ??= new Repository<SurveyResponse>(context);
 
-    public IRepository<SurveyResponseAnswer> Answers =>
+    public IRepository<SurveyResponseAnswer> SurveyResponseAnswers =>
         _answers ??= new Repository<SurveyResponseAnswer>(context);
 
-    public IRepository<SurveyResponseAnswerOption> AnswerOptions =>
+    public IRepository<SurveyResponseAnswerOption> SurveyResponseAnswerOptions =>
         _answerOptions ??= new Repository<SurveyResponseAnswerOption>(context);
 
     /// <summary>

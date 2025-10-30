@@ -9,9 +9,9 @@ public interface IUnitOfWork : IDisposable
     IRepository<Question> Questions { get; }
     IRepository<QuestionOption> QuestionOptions { get; }
     IRepository<SurveyToken> SurveyTokens { get; }
-    IRepository<SurveyResponse> Responses { get; }
-    IRepository<SurveyResponseAnswer> Answers { get; }
-    IRepository<SurveyResponseAnswerOption> AnswerOptions { get; }
+    IRepository<SurveyResponse> SurveyResponses { get; }
+    IRepository<SurveyResponseAnswer> SurveyResponseAnswers { get; }
+    IRepository<SurveyResponseAnswerOption> SurveyResponseAnswerOptions { get; }
 
 
     /// <summary>
