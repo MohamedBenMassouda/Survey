@@ -29,7 +29,7 @@ public class SurveyDbContext(DbContextOptions<SurveyDbContext> options) : DbCont
             .Entity<SurveyModel>()
             .Property(entity => entity.Status)
             .HasConversion<string>();
-        
+
         OnModelSeeding(modelBuilder);
     }
 
