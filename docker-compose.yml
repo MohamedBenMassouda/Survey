@@ -12,6 +12,21 @@ services:
       - survey_postgres_data:/var/lib/postgresql/data
     networks:
       - survey-network
+  
+  api:
+    build:
+      context: ./survey-backend
+      dockerfile: Dockerfile
+    container_name: survey-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Survey__ConnectionString=Host=postgresdb;Port=5432;Database=survey-db;Username=survey;Password=survey
+    depends_on:
+      - postgresdb
+    networks:
+      - survey-network
 
 volumes:
   survey_postgres_data:
